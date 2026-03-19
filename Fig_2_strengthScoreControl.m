@@ -1,0 +1,278 @@
+%% Deadlift and bench data for Raw and Wraps combined
+
+binIdx_all = [binIdx_raw(:) ; binIdx_wraps(:)];
+dataExist = sum(binIdx_all(:) == 1:numBins_BW) > 0;
+meanForBins_maxDeadlift_all = nan(numBins_BW,1);
+meanForBins_maxDeadlift_all(dataExist) = accumarray(binIdx_all, maxDeadlift_all, [], @median);
+meanForBins_maxBench_all = nan(numBins_BW,1);
+meanForBins_maxBench_all(dataExist) = accumarray(binIdx_all, maxBench_all, [], @median);
+
+%% Strength score attainment (z-scoring deadlift and bench data)
+
+curLift = 'deadlift'; % 'bench'
+
+xData = [T_raw.BW ; T_wraps.BW];
+
+yLim_zscore = 4;
+xTick = xLim_BW(1):10:xLim_BW(2);
+figPos = [2192 618 779 225];
+scInc_x = 1;
+scInc_y = 7;
+
+switch curLift
+    case 'deadlift'
+        yData = maxDeadlift_all;
+        yLim = [0 400];
+        yTick = 0:100:400;
+        BWcatMeanData = meanForBins_maxDeadlift_all;
+        zScoredData = zScoredData_deadlift;
+        meanResp = meanResp_deadlift;
+        meanResp_zScore = meanResp_zScore_deadlift;
+        SDresp = SDresp_deadlift;
+        saveName = 'maxDeadlift';
+    case 'bench'
+        yData = maxBench_all;
+        yLim = [0 250];
+        yTick = 0:50:250;
+        BWcatMeanData = meanForBins_maxBench_all;
+        zScoredData = zScoredData_bench;
+        meanResp = meanResp_bench;
+        meanResp_zScore = meanResp_zScore_bench;
+        SDresp = SDresp_bench;
+        saveName = 'maxBench';
+end
+
+% Raw data
+xData_lim = max(min(xData,xLim_BW(2)),xLim_BW(1));
+yData_lim = max(min(yData,yLim(2)),yLim(1));
+saveNameFull = fullfile(saveFigFol, sprintf('F2_%s_Kg_%s',saveName,sexToAnalyze));
+plotScatterRaster(xData_lim, yData_lim, saveNameFull, xLim_BW, yLim, yTick, ...
+    xTick, figPos,weightClassBins, binCenters_BWcat, BWcatMeanData, ...
+    xBins_centers, meanResp, SDresp, scInc_x, scInc_y)
+
+% Z-scored data
+saveNameFull = fullfile(saveFigFol, sprintf('F2_%s_zScore_%s',saveName,sexToAnalyze));
+yData_lim = min(max(zScoredData,-yLim_zscore),yLim_zscore);
+plotScatterRaster(xData_lim, yData_lim, saveNameFull, xLim_BW, ...
+    [-yLim_zscore yLim_zscore], -4:2:4, xTick, figPos, weightClassBins, ...
+    binCenters_BWcat, BWcatMeanData, xBins_centers, meanResp_zScore , ...
+    nan(numel(meanResp),1), scInc_x, .2)
+
+%% Strength score histograms for each BW bin
+
+smoothNum = 3;
+
+% Bins
+binStart = 1.5;
+binSize = .3;
+bins_stSc = -binStart-(binSize/2):binSize:binStart+(binSize/2);
+
+% Data for plot
+curData_raw = T_raw.strengthScore;
+curData_wraps = T_wraps.strengthScore;
+curInd_raw = T_raw.weightClassIndex;
+curInd_wraps = T_wraps.weightClassIndex;
+
+x_start = 2; % starting point on the x-axis for the first distribution
+x_spacer = 16; % how much to shift the next distribution in line, along the x-axis
+
+makeMutliHistogramPlot(bins_stSc, curData_raw, curData_wraps, ...
+    curInd_raw, curInd_wraps, smoothNum, x_start, x_spacer, numBins_BW, ...
+    enoughN, binStart)
+
+ylabel({'Strength score';'(z-score)'})
+
+saveName = fullfile(saveFigFol, sprintf('F2_histograms_StSc_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Raw vs Wraps difference in strength score
+
+figure
+plotMedDiff(binCenters_BWcat(enoughN), medDiff_stSc(enoughN), ...
+    CIs_stSc(enoughN,:), scatSizes(enoughN), xLim_BW, [-.5 .5], ...
+    weightClassBins, scatLims_size)
+
+saveName = fullfile(saveFigFol, sprintf('F2_wrapsMinusRaw_StSc_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Getting residuals from example BW bin
+
+curBWbin = 7; % the weight class bin to use
+
+smoothNum = 3; % smoothing for side histogram
+
+xData = [ T_raw.strengthScore(:) ; T_wraps.strengthScore(:) ];
+xLims = [-3 3];
+% The x- and y-limits to the area I want to show a close-up of
+closeUp_x = [2.3 2.7];
+closeUp_y = [273 296];
+
+yData = [ T_raw.maxSquat(:) ; T_wraps.maxSquat(:) ];
+yLims = [50 350];
+
+% Index to the current weight class's data
+curInd_raw = T_raw.weightClassIndex == curBWbin;
+curInd_wraps = T_wraps.weightClassIndex == curBWbin;
+curInd = [ curInd_raw(:) ; curInd_wraps(:) ];
+
+n_r = sum(curInd_raw);
+n_wr = sum(curInd_wraps);
+
+% Scatter point colors for Raw and Wraps
+col = [ zeros(n_r,3) ; repmat([1 0 0],n_wr,1)];
+
+% Data for plotting
+xPlot = xData(curInd);
+yPlot = yData(curInd);
+% Data within limits
+xPlot_lim = max(min(xPlot,xLims(2)),xLims(1));
+yPlot_lim = max(min(yPlot,yLims(2)),yLims(1));
+
+% Linear fit to the data
+yFit = polyfit(xPlot, yPlot, 1 );
+xData_fit = linspace(xLims(1),xLims(2),100);
+yData_fit = polyval(yFit,xData_fit);
+
+figure('Position',[2307 78 922 508])
+
+% Squat Kg versus strength score plot, for a single BW bin
+axes('Position',[ .05 .05 .3 .5])
+hold on
+scatter(xPlot_lim, yPlot_lim, 15, col, 'filled', 'MarkerFaceAlpha', 0.5)
+plot(xData_fit, yData_fit, 'g','LineWidth',3)
+set(gca,'XLim',xLims,'YLim',yLims,'tickdir','out','Color','none')
+xFill = [ closeUp_x(1) closeUp_x(2) closeUp_x(2) closeUp_x(1) closeUp_x(1) ];
+yFill = [ closeUp_y(1) closeUp_y(1) closeUp_y(2) closeUp_y(2) closeUp_y(1) ];
+fill(xFill,yFill,'b','FaceAlpha',0)
+pbaspect([1 1 1])
+
+% Inset showing close-up, to show residuals
+axes('Position',[ .3 .6 .13 .18])
+hold on
+ind_closeUp = find(xPlot > closeUp_x(1) & xPlot < closeUp_x(2) & ...
+    yPlot > closeUp_y(1) & yPlot < closeUp_y(2)); % Index to data within close-up area
+% Plot line
+yData_fit = polyval(yFit,closeUp_x);
+plot(closeUp_x, yData_fit, 'g','LineWidth',3)
+% Plot residuals
+residuals_closeUp = polyval(yFit,xPlot(ind_closeUp));
+for i = 1:numel(ind_closeUp)
+    plot([xPlot(ind_closeUp(i)) xPlot(ind_closeUp(i))],...
+        [yPlot(ind_closeUp(i)) residuals_closeUp(i)] , 'b' );
+end
+% Plot data points
+scatter(xPlot_lim(ind_closeUp), yPlot_lim(ind_closeUp), 60, ...
+    col(ind_closeUp,:), 'filled', 'MarkerFaceAlpha', 0.5)
+set(gca,'XLim',closeUp_x,'YLim',closeUp_y,'tickdir','out',...
+    'XLim',closeUp_x, 'YLim',closeUp_y, 'XTick','', ...
+    'YTick','','Color','none')
+pbaspect([1 1 1])
+
+% Squat Kg vs strength score with strength score regressed out of squat Kg
+axes('Position',[ .45 .05 .3 .5])
+hold on
+% Get residuals and fit
+yData = [ T_raw.residuals_strengthScore(:) ; T_wraps.residuals_strengthScore(:) ];
+yLims = [-100 100];
+yPlot = yData(curInd);
+yFit = polyfit(xPlot, yPlot, 1 );
+yData_fit = polyval(yFit,xData_fit);
+% Plot data
+yPlot_lim = max(min(yPlot,yLims(2)),yLims(1));
+scatter(xPlot_lim, yPlot_lim, 15, col, 'filled', 'MarkerFaceAlpha', 0.5)
+plot(xData_fit, yData_fit, 'g','LineWidth',3)
+pbaspect([1 1 1])
+set(gca,'XLim',xLims,'YLim',yLims,'tickdir','out','Color','none')
+
+% Side histogram
+axes('Position',[ .76 .05 .05 .5])
+hold on
+% Binning values
+h_lim = yLims(2);
+binSize = 10;
+bins = -h_lim-binSize/2:binSize:h_lim+binSize/2;
+numBins = numel(bins)-1;
+binCenters = (bins(1:end-1) + bins(2:end)) / 2;
+% Get raw data histogram
+curData = T_raw.residuals_strengthScore(curInd_raw);
+med_raw = median(curData);
+curData_lim = max(min(curData,h_lim),-h_lim);
+h = histcounts(curData_lim,bins);
+h_raw_per = (h / sum(h)) * 100;
+h_raw_per_sm = smooth(h_raw_per,smoothNum);
+% Get wraps data histogram
+curData = T_wraps.residuals_strengthScore(curInd_wraps);
+med_wraps = median(curData);
+curData_lim = max(min(curData,h_lim),-h_lim);
+h = histcounts(curData_lim,bins);
+h_wraps_per = (h / sum(h)) * 100;
+h_wraps_per_sm = smooth(h_wraps_per,smoothNum);
+% Plot histograms
+plot(h_raw_per_sm,binCenters,'k','linewidth',2)
+plot(h_wraps_per_sm,binCenters,'r','linewidth',2)
+XLIM = get(gca,'XLim');
+plot(XLIM,[med_raw med_raw],'k:','linewidth',1.5)
+plot(XLIM,[med_wraps med_wraps],'r:','linewidth',1.5)
+set(gca,'YColor','none','Color','none','box','off','clipping','off','tickdir','out')
+
+saveName = fullfile(saveFigFol, sprintf('F2_getResiduals_StSc_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% StSc-adjusted squat Kg histograms - for all BW bin
+
+smoothNum = 3;
+
+% Bins
+binStart = 60;
+binSize = 6;
+bins = -binStart-(binSize/2):binSize:binStart+(binSize/2);
+
+% Data for plot
+curData_raw = T_raw.residuals_strengthScore;
+curData_wraps = T_wraps.residuals_strengthScore;
+curInd_raw = T_raw.weightClassIndex;
+curInd_wraps = T_wraps.weightClassIndex;
+
+x_start = 2; % starting point on the x-axis for the first distribution
+x_spacer = 15; % how much to shift the next distribution in line, along the x-axis
+
+makeMutliHistogramPlot(bins, curData_raw, curData_wraps, ...
+    curInd_raw, curInd_wraps, smoothNum, x_start, x_spacer, numBins_BW, ...
+    enoughN, binStart)
+
+ylabel('Squat Kg')
+
+saveName = fullfile(saveFigFol, sprintf('F2_histograms_squatKg_res_StSc_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Difference in medians for StSc-adjusted squat weights
+
+figure
+
+plotMedDiff(binCenters_BWcat(enoughN), medDiff_squat_reg_stSc(enoughN), ...
+    CIs_squat_reg_stSc(enoughN,:), scatSizes(enoughN), xLim_BW, [-6 35], ...
+    weightClassBins, scatLims_size)
+scatter(binCenters_BWcat(enoughN), medDiff_squat(enoughN), 10, 'r', 'filled', 'MarkerFaceAlpha', 1);
+
+saveName = fullfile(saveFigFol, sprintf('F2_rapsMinusRaw_squatKg_res_stSc_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Adjusted as a percentage of unadjusted
+
+YLims = [0 150];
+XLims = [50 130];
+
+xData = weightClassBins(enoughN);
+yData = (medDiff_squat_reg_stSc(enoughN) ./ medDiff_squat(enoughN))  * 100;
+yData_lim = max(min(yData, YLims(2)),YLims(1));
+
+figure
+hold on
+scatter(xData, yData_lim,150,'k','filled','MarkerFaceAlpha',0.5)
+set(gca,'XLim',XLims,'YLim',YLims,'fontsize',17,'linewidth',1,...
+    'tickdir','out','Color','none','xtick',xData)
+plot(XLims,[0 0],'k:')
+plot(XLims,[100 100],'k:')
+
+saveName = fullfile(saveFigFol, sprintf('F2_adjustVsUnadjust_squatKg_res_stSc_%s',sexToAnalyze));
+saveFig(saveName);

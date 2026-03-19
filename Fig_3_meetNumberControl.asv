@@ -1,0 +1,234 @@
+cols = [ 0 1 1 ; 0 .498 1 ; .5098 0 .7255 ];
+
+%% Meet count distribution
+
+tickPoints = 0:4; % tick points on the y-axis (log10)
+
+breakPoint = 30; % where to break the x-axis
+lastMC = 100; % where to have the last x-axis point
+
+meetCount_all  = [T_raw.meetNumber ; T_wraps.meetNumber];
+
+% Data for main histogram
+bins = 1:breakPoint;
+h = histcounts(meetCount_all, [bins-.5 bins(end)+.5]);
+h_log = nan(size(h));
+h_log(h>0) = log10(h(h>0));
+% Plot main histogram
+figure
+axes('Position',[0.12 0.15 0.6 0.7])
+hold on
+scatter(bins, h_log, 50,'filled');
+scatter(bins(h==0), repmat(tickPoints(1),sum(h==0),1), 50, 'r', "x");
+ytickLab = arrayfun(@(x) {num2str(x)}, 10.^tickPoints);
+set(gca,'Ytick',tickPoints,'yticklabel',ytickLab,...
+    'Color','none','tickdir','out','linewidth',1,'fontsize',15,...
+    'box','off','YLim',[tickPoints(1) tickPoints(end)])
+
+% Data for smaller histogram to the right
+bins = breakPoint+1:1:lastMC;
+h = histcounts(meetCount_all, [bins-.5 bins(end)+.5]);
+h_log = nan(size(h));
+h_log(h>0) = log10(h(h>0));
+% Plot main histogram
+axes('Position',[0.77 0.15 0.18 0.7])
+hold on
+scatter(bins, h_log, 50, 'filled');
+scatter(bins(h==0), repmat(tickPoints(1),sum(h==0),1) , 50,'r',"x");
+ytickLab = arrayfun(@(x) {num2str(x)}, 10.^tickPoints);
+set(gca,'YColor','none','XTick',[bins(1) bins(end)],...
+    'Color','none','tickdir','out','linewidth',1,'fontsize',15,...
+    'box','off','YLim',[tickPoints(1) tickPoints(end)])
+
+saveName = fullfile(saveFigFol, sprintf('F3_meetCountDistribution_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Meet count percentages - stacked bar plots
+
+% x-axis data
+binCenters_raw = binCenters_BWcat - 1;
+binCenters_wraps = binCenters_BWcat + 1;
+xData = nan(2*numBins_BW, 1);
+xData(1:2:end) = binCenters_raw;
+xData(2:2:end) = binCenters_wraps;
+
+enoughN_two = repelem(enoughN(:),2,1);
+
+% Get percentages of each meet count occurrence
+allPers_cell = cell(2*numBins_BW, 1);
+allPers_cell(1:2:end) = per_MN_BW_raw;
+allPers_cell(2:2:end) = per_MN_BW_wraps;
+allPers = cell2mat(allPers_cell);
+
+figure
+hold on
+b = bar( xData(enoughN_two) , allPers(enoughN_two,:) , 'stacked');
+for i = 1:numel(weightClassBins)
+    plot([weightClassBins(i) weightClassBins(i)],[0 100],'r:')
+end
+set(gca,'XLim',xLim_BW,'yLim',[0 100],'Color','none','tickdir','out',...
+    'box','off')
+
+b(1).FaceColor = cols(1,:);
+b(2).FaceColor = cols(2,:);
+b(3).FaceColor = cols(3,:);
+
+saveName = fullfile(saveFigFol, sprintf('F3_stackedBar_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Percentages for Wraps versus Raw
+
+axLim = [10 50];
+
+n_enoughN = sum(enoughN);
+
+xData = reshape( cat(1,per_MN_BW_raw{enoughN}), [n_enoughN*3,1] );
+yData = reshape( cat(1,per_MN_BW_wraps{enoughN}), [n_enoughN*3,1] );
+
+cols_plot = repelem(cols , n_enoughN, 1);
+
+xData_lim = max(min(xData,axLim(2)),axLim(1));
+yData_lim = max(min(yData,axLim(2)),axLim(1));
+
+figure
+hold on
+scatter(xData_lim, yData_lim, 100, cols_plot,'filled', 'MarkerFaceAlpha',0.75);
+plot(axLim, axLim, 'k:')
+set(gca,'XLim',axLim,'YLim',axLim,'Color','none','tickdir','out',...
+    'XTick',axLim(1):10:axLim(2),'YTick',axLim(1):10:axLim(2))
+
+daspect([1,1,1])
+
+saveName = fullfile(saveFigFol, sprintf('F3_percentVsPercent_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Stacked bar plots for matched example
+
+curIter = 1; % the iteration to plot for the example plot
+
+dataExists_raw = sum(T_raw.weightClassIndex(take_randSamp_raw(:,curIter)) == 1:numBins_BW) > 0;
+dataExists_wraps = sum(T_wraps.weightClassIndex(take_randSamp_wraps(:,curIter)) == 1:numBins_BW) > 0;
+
+% Get the percentage bins for the current rand sample
+count_MC_BW_raw_randSamp = cell(numBins_BW,1);
+count_MC_BW_raw_randSamp(dataExists_raw) = ...
+    accumarray(T_raw.weightClassIndex(take_randSamp_raw(:,curIter)), ...
+    T_raw.meetNumber(take_randSamp_raw(:,curIter)), [], ...
+    @(dataIn){ binData(dataIn, bins_MC) });
+count_MC_BW_wraps_randSamp = cell(numBins_BW,1);
+count_MC_BW_wraps_randSamp(dataExists_wraps) = ...
+    accumarray(T_wraps.weightClassIndex(take_randSamp_wraps(:,curIter)), ... 
+    T_wraps.meetNumber(take_randSamp_wraps(:,curIter)), [], ...
+    @(dataIn){ binData(dataIn, bins_MC) });
+% Convert counts to percentages
+func = @(x) (x/sum(x))*100;
+per_MC_BW_raw_randSamp = cellfun(func, count_MC_BW_raw_randSamp, 'UniformOutput', false);
+per_MC_BW_wraps_randSamp = cellfun(func, count_MC_BW_wraps_randSamp, 'UniformOutput', false);
+
+xData = nan(2*numBins_BW, 1);
+xData(1:2:end) = binCenters_raw;
+xData(2:2:end) = binCenters_wraps;
+
+% Plot the percentage - they should be the same between Raw and Wraps
+enoughN_two = repelem(enoughN(:),2,1);
+allPers_cell = cell(2*numBins_BW, 1);
+allPers_cell(1:2:end) = per_MC_BW_raw_randSamp;
+allPers_cell(2:2:end) = per_MC_BW_wraps_randSamp;
+allPers = cell2mat(allPers_cell);
+figure
+hold on
+b = bar( xData(enoughN_two) , allPers(enoughN_two,:) , 'stacked');
+for i = 1:numel(weightClassBins)
+    plot([weightClassBins(i) weightClassBins(i)],[0 100],'r:')
+end
+set(gca,'XLim',xLim_BW,'yLim',[0 100],'Color','none','tickdir','out',...
+    'box','off')
+b(1).FaceColor = cols(1,:);
+b(2).FaceColor = cols(2,:);
+b(3).FaceColor = cols(3,:);
+
+saveName = fullfile(saveFigFol, sprintf('F3_stackedBar_matchedEx_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Median diff plot for current iteration
+
+figure
+
+n_matched = sum(T_raw.weightClassIndex(take_randSamp_raw(:,1)) == 1:numBins_BW);
+
+% Get medians and the difference in medians for the matched data for the
+% current example iteration
+med_raw = nan(numBins_BW,1);
+med_raw(dataExists_raw) = splitapply(@median, T_raw.maxSquat(take_randSamp_raw(:,curIter)),...
+    T_raw.weightClassIndex(take_randSamp_raw(:,curIter)));
+med_wraps = nan(numBins_BW,1);
+med_wraps(dataExists_wraps) = splitapply(@median, T_wraps.maxSquat(take_randSamp_wraps(:,curIter)),...
+    T_wraps.weightClassIndex(take_randSamp_wraps(:,curIter)));
+medDiff = med_wraps - med_raw;
+
+nForBins_lim = min(n_matched, scatLims_n(2));
+scatSizes_matched = (nForBins_lim - scatLims_n(1)) ./ diff(scatLims_n) ...
+        * diff(scatLims_size) + scatLims_size(1);
+
+hold on
+
+enoughN_matched = n_matched > minN;
+
+xData = binCenters_BWcat(enoughN_matched);
+yData = medDiff(enoughN_matched);
+
+plot(xData, yData,'Color',[0 0 0 .15],'LineWidth',1)
+
+plot(xLim_BW,[0 0],'k:','linewidth',0.5)
+
+scatter(xData, yData, scatSizes_matched(enoughN_matched), 'k', 'filled', 'MarkerFaceAlpha', 1);
+
+for i = 1:numel(weightClassBins)
+    plot([weightClassBins(i) weightClassBins(i)],yLim_squat,'r:')
+end
+
+set(gca,'XLim',xLim_BW,'yLim',yLim_squat,'Color','none','tickdir','out','clipping','off')
+
+xDataTemp = [xLim_BW(2) - diff(xLim_BW)*.15 xLim_BW(2) - diff(xLim_BW)*.08];
+yDataTemp = yLim_squat(1) + diff(yLim_squat)*.05;
+scatter(xDataTemp, [yDataTemp yDataTemp],scatLims_size,'g','filled')
+
+saveName = fullfile(saveFigFol, sprintf('F3_WrapsMinusRaw_ex_squatKg_match_MC_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Mean median difference plot from all iterations
+
+figure
+plotMedDiff(binCenters_BWcat(enoughN_matched), meanMedDiff_squat_match_MN(enoughN_matched), ...
+    CIs_squat_match_MN(enoughN_matched,:), scatSizes_matched(enoughN_matched), xLim_BW, yLim_squat, ...
+    weightClassBins, scatLims_size)
+scatter(binCenters_BWcat(enoughN), medDiff_squat(enoughN), 10, 'r', 'filled', 'MarkerFaceAlpha', 1);
+
+saveName = fullfile(saveFigFol, sprintf('F3_WrapsMinusRaw_squatKg_match_MN_%s',sexToAnalyze));
+saveFig(saveName);
+
+%% Matched versus unmatched
+
+YLims = [-25 100];
+XLims = [50 130];
+
+xData = weightClassBins(enoughN);
+yData = ( meanMedDiff_squat_match_MN(enoughN_matched) ./ medDiff_squat(enoughN)) * 100;
+yData_lim = max(min(yData, YLims(2)),YLims(1));
+
+figure
+hold on
+scatter(xData, yData_lim,150,'k','filled','MarkerFaceAlpha',0.5)
+set(gca,'XLim',XLims,'YLim',YLims,'fontsize',17,'linewidth',1,...
+    'tickdir','out','Color','none','ytick',-25:25:100, 'xtick',xData)
+plot(XLims,[0 0],'k:')
+
+pVal_diff = nan(1);
+if exist('signrank','file') > 0
+    pVal_diff = signrank(medDiff_squat(enoughN),meanMedDiff_squat_match_MN(enoughN_matched));
+end
+
+saveName = fullfile(saveFigFol, sprintf('F3_matchVsUnmatch_squatKg_MN_%s',sexToAnalyze));
+saveFig(saveName);
+
+
